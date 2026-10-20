@@ -4,11 +4,13 @@
   --accent: #5ee0ff;
   --accent-soft: rgba(94, 224, 255, 0.16);
   --board: #123324;
-  --card: rgba(20, 34, 27, 0.92);
-  --card-line: rgba(238, 244, 238, 0.12);
+  --card: rgba(12, 28, 20, 0.72);
+  --card-line: rgba(238, 244, 238, 0.14);
   --warn: #ffb4a2;
   --ok: #8fe3a6;
   --radius: 14px;
+  --panel-w: 310px;
+  --rack-h: 32px;
 }
 
 * {
@@ -18,164 +20,262 @@
 html,
 body {
   margin: 0;
-  min-height: 100%;
+  height: 100%;
+  width: 100%;
+  overflow: hidden;
 }
 
 body {
-  background:
-    radial-gradient(1200px 600px at 80% -10%, rgba(94, 224, 255, 0.08), transparent 60%),
-    radial-gradient(900px 500px at 0% 110%, rgba(243, 210, 78, 0.06), transparent 55%),
-    #0b120e;
+  background: #0b120e;
   color: var(--ink);
   font-family: "PingFang SC", "Microsoft YaHei", system-ui, -apple-system, "Segoe UI", sans-serif;
   -webkit-font-smoothing: antialiased;
 }
 
 #app {
-  max-width: 1280px;
-  margin: 0 auto;
-  padding: 22px 22px 46px;
+  width: 100vw;
+  height: 100vh;
+  position: relative;
+  overflow: hidden;
 }
 
 .topbar {
+  position: absolute;
+  top: 53px;
+  left: 18px;
   display: flex;
   flex-direction: column;
   align-items: flex-start;
-  gap: 6px;
-  margin-bottom: 20px;
+  gap: 2px;
+  z-index: 30;
+  pointer-events: none;
 }
 
 .brand {
-  height: 46px;
+  height: 34px;
   width: auto;
   max-width: 100%;
-  filter: drop-shadow(0 2px 10px rgba(0, 0, 0, 0.5));
+  filter: drop-shadow(0 2px 10px rgba(0, 0, 0, 0.6));
 }
 
 .tagline {
   margin: 0;
-  color: var(--muted);
-  font-size: 13.5px;
+  color: rgba(238, 244, 238, 0.6);
+  font-size: 12px;
   letter-spacing: 0.4px;
 }
 
 .layout {
-  display: grid;
-  grid-template-columns: minmax(0, 1.55fr) minmax(320px, 1fr);
-  gap: 18px;
+  position: absolute;
+  inset: 0;
 }
 
 .stage {
-  grid-column: 1;
-  grid-row: 1;
-  min-width: 0;
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
 }
 
-.control {
-  grid-column: 2;
-  grid-row: 1;
-  display: flex;
-  flex-direction: column;
-  gap: 16px;
-  min-width: 0;
+/* ---------- 黑板（含双层 canvas） ---------- */
+
+.board-shell {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: #123324;
+  background-image: url("/brand/board.webp");
+  background-size: cover;
+  background-position: center;
+  box-shadow: inset 0 0 120px rgba(0, 0, 0, 0.5);
 }
 
-.graph {
-  grid-column: 1 / -1;
-  grid-row: 2;
-  min-width: 0;
+/* 书写层：铺满整个黑板 */
+#board {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  cursor: none;
+  z-index: 1;
 }
 
-.exit-card {
-  grid-column: 1 / -1;
+/* 图像层：黑板右下角一个小窗口，直接融入黑板 */
+#plot {
+  position: absolute;
+  right: 22px;
+  bottom: 40px;
+  width: 400px;
+  height: 300px;
+  border-radius: 8px;
+  z-index: 2;
+  pointer-events: auto;
+  cursor: grab;
 }
 
-.card,
-.graph,
-.stage {
-  border-radius: var(--radius);
+#plot:active {
+  cursor: grabbing;
 }
 
-.card {
-  background: var(--card);
-  border: 1px solid var(--card-line);
-  padding: 16px 16px 18px;
-  backdrop-filter: blur(6px);
+.board-hint,
+.graph-hint {
+  position: absolute;
+  pointer-events: none;
+  transition: opacity 0.3s;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.6);
 }
 
-.card-head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  margin-bottom: 12px;
+.board-hint {
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  color: rgba(238, 244, 238, 0.5);
+  font-size: 16px;
+  letter-spacing: 1px;
+  z-index: 3;
 }
 
-.card h2,
-.graph h2 {
-  font-size: 14px;
-  font-weight: 600;
-  letter-spacing: 0.6px;
-  color: var(--ink);
-  margin: 0;
+.graph-hint {
+  right: 22px;
+  bottom: 32px;
+  width: 400px;
+  text-align: center;
+  color: rgba(238, 244, 238, 0.35);
+  font-size: 11px;
+  letter-spacing: 0.5px;
+  z-index: 3;
+  opacity: 0;
 }
 
-/* ---------- board ---------- */
+/* plot 窗口右下角的"重置"小按钮 */
+.plot-reset {
+  position: absolute;
+  right: calc(22px + 10px);
+  bottom: calc(40px + 10px);
+  z-index: 4;
+  pointer-events: auto;
+  cursor: pointer;
+  padding: 3px 10px;
+  border-radius: 4px;
+  font-size: 12px;
+  color: rgba(247, 246, 239, 0.75);
+  background: rgba(0, 0, 0, 0.25);
+  border: 1px solid rgba(247, 246, 239, 0.18);
+  transition: background 0.15s, color 0.15s, border-color 0.15s;
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+}
+
+.plot-reset:hover {
+  color: #f7f6ef;
+  background: rgba(0, 0, 0, 0.45);
+  border-color: rgba(247, 246, 239, 0.4);
+}
+
+/* ---------- 黑板下方置物栏 ---------- */
+
+.chalk-rack {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 30px;
+  z-index: 15;
+  pointer-events: none;
+}
+
+/* 木质搁板本身 */
+.chalk-rack::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 22px;
+  pointer-events: none;
+}
+
+/* 搁板上面的物品容器 */
+.rack-items {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 26px; /* 物品底部落在木栏顶 */
+  height: 42px;
+  pointer-events: none;
+}
+
+/* 物品基础：贴在搁板上，由 JS 绝对定位 */
+.rack-item {
+  position: absolute;
+  bottom: 0;
+  cursor: grab;
+  pointer-events: auto;
+  transition: filter 0.18s, transform 0.18s;
+  transform-origin: center bottom;
+}
+
+.rack-item:hover {
+  filter: brightness(1.1);
+}
+
+.rack-item.is-active {
+  transform: translateY(-6px) rotate(0deg) !important;
+  filter: drop-shadow(0 0 8px rgba(94, 224, 255, 0.8));
+}
+
+.rack-item.dragging {
+  cursor: grabbing;
+  z-index: 99;
+  transform: translateY(-10px) scale(1.05);
+  filter: brightness(1.15) drop-shadow(0 4px 10px rgba(0, 0, 0, 0.7));
+  transition: none;
+}
+
+.rack-item img {
+  display: block;
+  width: auto;
+  filter: drop-shadow(0 2px 2px rgba(0, 0, 0, 0.65));
+  transition: filter 0.18s;
+}
+
+/* ===== 尺寸 ===== */
+
+/* 白粉笔头：极短小 */
+.rack-chalk-white img { height: 9px; width: auto; }
+.rack-chalk-yellow img { height: 9px; width: auto; }
+
+/* 黑板擦 */
+.rack-eraser img { height: 34px; width: auto; max-width: 80px; }
+
+/* ---------- 工具栏 ---------- */
 
 .stage-toolbar {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  margin-bottom: 12px;
-}
-
-.tool-group {
+  position: absolute;
+  top: 14px;
+  right: 18px;
   display: flex;
   align-items: center;
   gap: 8px;
-}
-
-.tool-btn {
-  width: 58px;
-  height: 40px;
+  padding: 6px 10px;
   border-radius: 10px;
+  background: rgba(12, 28, 20, 0.65);
   border: 1px solid var(--card-line);
-  background: rgba(255, 255, 255, 0.03);
-  display: grid;
-  place-items: center;
-  cursor: pointer;
-  transition: border-color 0.15s, background 0.15s, transform 0.1s;
-}
-
-.tool-btn img {
-  height: 20px;
-  width: auto;
-  max-width: 44px;
-  object-fit: contain;
-  filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.5));
-}
-
-.tool-btn:hover {
-  transform: translateY(-1px);
-  background: rgba(255, 255, 255, 0.06);
-}
-
-.tool-btn.is-active {
-  border-color: var(--accent);
-  background: var(--accent-soft);
-  box-shadow: 0 0 0 1px var(--accent) inset;
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  z-index: 25;
 }
 
 .ghost-btn {
-  height: 40px;
-  padding: 0 16px;
-  border-radius: 10px;
+  height: 32px;
+  padding: 0 14px;
+  border-radius: 8px;
   border: 1px solid var(--card-line);
   background: transparent;
   color: var(--ink);
   cursor: pointer;
-  font-size: 13px;
+  font-size: 12.5px;
   transition: border-color 0.15s, background 0.15s;
 }
 
@@ -184,13 +284,19 @@ body {
   background: var(--accent-soft);
 }
 
+.ghost-btn.sm {
+  height: 28px;
+  padding: 0 10px;
+  font-size: 12px;
+}
+
 .primary-btn {
-  height: 38px;
-  padding: 0 20px;
-  border-radius: 10px;
+  height: 34px;
+  padding: 0 18px;
+  border-radius: 8px;
   border: none;
   cursor: pointer;
-  font-size: 13.5px;
+  font-size: 13px;
   font-weight: 600;
   color: #06231c;
   background: linear-gradient(135deg, #6ff0ff, #4cc9f0);
@@ -200,8 +306,8 @@ body {
 
 .primary-btn.wide {
   width: 100%;
-  margin-top: 14px;
-  height: 42px;
+  margin-top: 12px;
+  height: 38px;
 }
 
 .primary-btn:hover:not(:disabled) {
@@ -214,86 +320,65 @@ body {
   cursor: progress;
 }
 
-.board-shell {
-  position: relative;
-  width: 100%;
-  aspect-ratio: 16 / 9;
-  border-radius: 12px;
-  background-color: #123324;
-  background-image: url("/brand/board.webp");
-  background-size: cover;
-  background-position: center;
-  box-shadow: inset 0 0 90px rgba(0, 0, 0, 0.55), 0 18px 40px rgba(0, 0, 0, 0.45);
-  overflow: hidden;
-}
+/* ---------- 识别 & 编辑卡片 ---------- */
 
-.board-shell canvas {
+.card {
   position: absolute;
-  inset: 0;
-  width: 100%;
-  height: 100%;
-  cursor: crosshair;
-}
-
-.board-hint,
-.graph-hint {
-  position: absolute;
-  left: 50%;
-  top: 50%;
-  transform: translate(-50%, -50%);
-  color: rgba(238, 244, 238, 0.5);
-  font-size: 15px;
-  letter-spacing: 1px;
-  pointer-events: none;
-  transition: opacity 0.3s;
-  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.6);
-}
-
-.graph-hint {
-  color: rgba(238, 244, 238, 0.35);
-  font-size: 13px;
-  top: auto;
-  bottom: 14px;
-  transform: translateX(-50%);
-}
-
-/* ---------- control ---------- */
-
-.latex-box {
-  min-height: 62px;
-  border-radius: 10px;
-  border: 1px dashed var(--card-line);
-  background: rgba(0, 0, 0, 0.25);
+  width: var(--panel-w);
+  max-height: calc(100vh - var(--rack-h) - 40px);
+  overflow-y: auto;
+  border-radius: var(--radius);
+  background: var(--card);
+  border: 1px solid var(--card-line);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
   padding: 12px;
-  display: grid;
-  place-items: center;
-  overflow-x: auto;
+  z-index: 20;
+  box-shadow: 0 10px 36px rgba(0, 0, 0, 0.45);
   color: var(--ink);
 }
 
-.latex-box .placeholder {
-  color: var(--muted);
-  font-size: 13px;
+.card-left {
+  left: 18px;
+  top: 50%;
+  transform: translateY(-50%);
 }
 
-.latex-box .katex {
-  font-size: 1.5em;
-  color: #eafff6;
+.card-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 8px;
 }
 
-.raw-latex {
-  margin-top: 8px;
-  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+.card-head-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.card h2 {
+  font-size: 12.5px;
+  font-weight: 600;
+  letter-spacing: 0.5px;
+  color: var(--ink);
+  margin: 0;
+}
+
+.card-divider { display: none; }
+.mode-toggle, .manual-panel { display: none !important; }
+
+.primary-btn.sm {
+  height: 30px;
+  padding: 0 14px;
   font-size: 12px;
-  color: var(--muted);
-  word-break: break-all;
-  min-height: 16px;
 }
 
 .status {
   margin-top: 10px;
-  font-size: 12.5px;
-  min-height: 17px;
+  font-size: 12px;
+  min-height: 16px;
   color: var(--muted);
 }
 
@@ -309,19 +394,22 @@ body {
 
 .mode-switch {
   display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 8px;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 4px;
+  margin-bottom: 8px;
 }
 
 .mode-switch button {
-  height: 38px;
-  border-radius: 10px;
+  height: 28px;
+  border-radius: 6px;
   border: 1px solid var(--card-line);
   background: rgba(255, 255, 255, 0.03);
   color: var(--muted);
-  font-size: 12.5px;
+  font-size: 11.5px;
   cursor: pointer;
   transition: all 0.15s;
+  padding: 0 4px;
+  white-space: nowrap;
 }
 
 .mode-switch button:hover {
@@ -335,15 +423,13 @@ body {
   background: var(--accent-soft);
 }
 
-.expr-fields {
-  margin-top: 14px;
-}
+.expr-fields {}
 
 .expr-field {
   display: none;
   align-items: center;
-  gap: 10px;
-  margin-bottom: 10px;
+  gap: 8px;
+  margin-bottom: 6px;
 }
 
 .expr-field.is-visible {
@@ -351,78 +437,89 @@ body {
 }
 
 .expr-field span {
-  min-width: 72px;
+  min-width: 64px;
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-  font-size: 13px;
+  font-size: 12px;
   color: var(--accent);
 }
 
 .expr-field input {
   flex: 1;
-  height: 38px;
-  border-radius: 9px;
+  height: 30px;
+  border-radius: 6px;
   border: 1px solid var(--card-line);
   background: rgba(0, 0, 0, 0.3);
   color: var(--ink);
-  padding: 0 12px;
+  padding: 0 10px;
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-  font-size: 13.5px;
+  font-size: 13px;
   outline: none;
 }
 
 .expr-field input:focus {
   border-color: var(--accent);
-  box-shadow: 0 0 0 3px var(--accent-soft);
+  box-shadow: 0 0 0 2px var(--accent-soft);
 }
 
-/* ---------- graph ---------- */
+/* ---------- 黑板上的自定义工具光标 ---------- */
 
-.graph {
-  background: var(--card);
-  border: 1px solid var(--card-line);
-  padding: 14px 16px 16px;
-}
-
-.graph-head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  margin-bottom: 12px;
-}
-
-.graph-shell {
-  position: relative;
-  width: 100%;
-  height: 440px;
-  border-radius: 12px;
-  overflow: hidden;
-  border: 1px solid var(--card-line);
-  background: #0d1a13;
-}
-
-.graph-shell canvas {
+.tool-cursor {
   position: absolute;
-  inset: 0;
-  width: 100%;
-  height: 100%;
-  cursor: grab;
+  pointer-events: none;
+  z-index: 5;
+  transform: translate(-50%, -50%);
+  opacity: 0;
+  transition: opacity 0.15s;
+  filter: drop-shadow(0 1px 3px rgba(0, 0, 0, 0.8));
 }
 
-.graph-shell canvas:active {
-  cursor: grabbing;
+.tool-cursor.visible {
+  opacity: 1;
 }
 
-@media (max-width: 980px) {
+.tool-cursor img {
+  display: block;
+  width: 36px;
+  height: auto;
+}
+
+.tool-cursor[data-tool="chalk-white"] img,
+.tool-cursor[data-tool="chalk-yellow"] img {
+  transform: rotate(-30deg);
+}
+
+.tool-cursor[data-tool="eraser"] img {
+  width: 42px;
+}
+
+/* ---------- 响应式 ---------- */
+
+@media (max-width: 900px) {
+  .card {
+    position: relative;
+    width: 100%;
+    max-height: none;
+    top: auto !important;
+    bottom: auto !important;
+    left: auto !important;
+    right: auto !important;
+  }
   .layout {
-    grid-template-columns: 1fr;
+    position: absolute;
+    inset: 0;
+    overflow-y: auto;
   }
-  .stage,
-  .control,
-  .graph {
-    grid-column: 1;
-    grid-row: auto;
+  .stage {
+    position: relative;
+    min-height: 100vh;
+    padding: 60px 14px calc(var(--rack-h) + 14px);
   }
-  .graph-shell {
-    height: 340px;
+  .board-shell {
+    position: relative;
+    width: 100%;
+    aspect-ratio: 16 / 9;
+    inset: auto;
+    bottom: auto;
+    border-radius: 12px;
   }
 }

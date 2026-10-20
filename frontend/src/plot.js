@@ -1,12 +1,11 @@
 import { compile } from "mathjs";
 
 const COLORS = {
-  bg: "#0d1a13",
-  grid: "rgba(233, 245, 236, 0.08)",
-  axis: "rgba(233, 245, 236, 0.38)",
-  label: "rgba(233, 245, 236, 0.55)",
-  curve: "#5ee0ff",
-  curveGlow: "rgba(94, 224, 255, 0.45)",
+  grid: "rgba(247, 246, 239, 0.09)",
+  axis: "rgba(247, 246, 239, 0.45)",
+  label: "rgba(247, 246, 239, 0.6)",
+  curve: "#f3d24e",
+  curveSoft: "rgba(243, 210, 78, 0.25)",
 };
 
 function makeEval(expr) {
@@ -48,9 +47,10 @@ function fmt(n, step) {
 }
 
 export class Plotter {
-  constructor(canvas, hintEl) {
+  constructor(canvas, hintEl, container) {
     this.canvas = canvas;
     this.hint = hintEl;
+    this.container = container || canvas;
     this.ctx = canvas.getContext("2d");
     this.dpr = Math.min(window.devicePixelRatio || 1, 2);
     this.view = { xMin: -10, xMax: 10, yMin: -6, yMax: 6 };
@@ -73,14 +73,17 @@ export class Plotter {
   }
 
   _bind() {
-    const c = this.canvas;
+    const c = this.container;
+    const getCanvasRect = () => this.canvas.getBoundingClientRect();
+
     c.addEventListener(
       "wheel",
       (e) => {
         e.preventDefault();
-        const rect = c.getBoundingClientRect();
+        const rect = getCanvasRect();
         const px = e.clientX - rect.left;
         const py = e.clientY - rect.top;
+        if (px < 0 || py < 0 || px > rect.width || py > rect.height) return;
         const wx = this._sx2wx(px);
         const wy = this._sy2wy(py);
         const factor = e.deltaY < 0 ? 0.85 : 1 / 0.85;
@@ -94,13 +97,17 @@ export class Plotter {
     );
 
     c.addEventListener("pointerdown", (e) => {
-      c.setPointerCapture(e.pointerId);
-      const rect = c.getBoundingClientRect();
-      this.drag = { x: e.clientX - rect.left, y: e.clientY - rect.top };
+      if (!this.spec) return;
+      const rect = getCanvasRect();
+      const px = e.clientX - rect.left;
+      const py = e.clientY - rect.top;
+      if (px < 0 || py < 0 || px > rect.width || py > rect.height) return;
+      c.setPointerCapture?.(e.pointerId);
+      this.drag = { x: px, y: py };
     });
     c.addEventListener("pointermove", (e) => {
       if (!this.drag) return;
-      const rect = c.getBoundingClientRect();
+      const rect = getCanvasRect();
       const x = e.clientX - rect.left;
       const y = e.clientY - rect.top;
       const dx = (x - this.drag.x) / this.cssW;
@@ -230,8 +237,6 @@ export class Plotter {
     const W = this.cssW;
     const H = this.cssH;
     ctx.clearRect(0, 0, W, H);
-    ctx.fillStyle = COLORS.bg;
-    ctx.fillRect(0, 0, W, H);
 
     this._drawGrid();
     this._drawAxes();
@@ -264,8 +269,13 @@ export class Plotter {
     const { xMin, xMax, yMin, yMax } = this.view;
     const stepX = niceStep(xMax - xMin);
     const stepY = niceStep(yMax - yMin);
+
+    // 矩形边框
     ctx.lineWidth = 1.4;
     ctx.strokeStyle = COLORS.axis;
+    ctx.strokeRect(0.5, 0.5, this.cssW - 1, this.cssH - 1);
+
+    // 原点坐标轴（若在视野内）
     ctx.beginPath();
     if (yMin <= 0 && yMax >= 0) {
       const py = Math.round(this._sy(0)) + 0.5;
@@ -313,11 +323,11 @@ export class Plotter {
   _beginCurve() {
     const ctx = this.ctx;
     ctx.strokeStyle = COLORS.curve;
-    ctx.lineWidth = 2.1;
+    ctx.lineWidth = 2.6;
     ctx.lineJoin = "round";
     ctx.lineCap = "round";
-    ctx.shadowColor = COLORS.curveGlow;
-    ctx.shadowBlur = 8;
+    ctx.shadowColor = COLORS.curveSoft;
+    ctx.shadowBlur = 10;
   }
 
   _endCurve() {

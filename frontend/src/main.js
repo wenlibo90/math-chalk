@@ -1,24 +1,20 @@
-import katex from "katex";
-import "katex/dist/katex.min.css";
 import "./style.css";
 import { ChalkBoard } from "./chalk.js";
 import { Plotter, makeEval } from "./plot.js";
 import { recognize } from "./api.js";
 
 const el = {
+  boardShell: document.querySelector(".board-shell"),
   board: document.getElementById("board"),
   boardHint: document.getElementById("board-hint"),
   plot: document.getElementById("plot"),
   plotHint: document.getElementById("graph-hint"),
   recognizeBtn: document.getElementById("recognize-btn"),
-  plotBtn: document.getElementById("plot-btn"),
   clearBtn: document.getElementById("clear-btn"),
   resetView: document.getElementById("reset-view"),
-  latexBox: document.getElementById("latex-box"),
-  rawLatex: document.getElementById("raw-latex"),
   status: document.getElementById("status"),
   modeSwitch: document.getElementById("mode-switch"),
-  toolBtns: Array.from(document.querySelectorAll(".tool-btn")),
+  rackItems: Array.from(document.querySelectorAll(".rack-item")),
   modeBtns: Array.from(document.querySelectorAll("#mode-switch button")),
   fieldEls: Array.from(document.querySelectorAll(".expr-field")),
   inputExplicit: document.getElementById("input-explicit"),
@@ -29,15 +25,165 @@ const el = {
 };
 
 const board = new ChalkBoard(el.board, el.boardHint);
-const plotter = new Plotter(el.plot, el.plotHint);
+const plotter = new Plotter(el.plot, el.plotHint, el.boardShell);
 
-const state = { mode: "explicit" };
+const state = { mode: "explicit", currentTool: "chalk-white" };
 
 const TOOL_MAP = {
   "chalk-white": { type: "chalk", color: "chalk-white" },
   "chalk-yellow": { type: "chalk", color: "chalk-yellow" },
   eraser: { type: "eraser" },
 };
+
+const TOOL_ICON = {
+  "chalk-white": "/brand/chalk-white.png",
+  "chalk-yellow": "/brand/chalk-yellow.png",
+  eraser: "/brand/eraser.png",
+};
+
+/* ---------- 黑板上跟随鼠标的工具光标（粉笔有、黑板擦无） ---------- */
+
+const toolCursor = document.createElement("div");
+toolCursor.className = "tool-cursor";
+toolCursor.innerHTML = `<img alt="">`;
+el.boardShell.appendChild(toolCursor);
+const toolCursorImg = toolCursor.querySelector("img");
+
+function applyToolCursor(toolKey) {
+  state.currentTool = toolKey;
+  board.setTool(TOOL_MAP[toolKey]);
+
+  if (toolKey === "eraser") {
+    // 黑板擦模式：隐藏小光标，恢复原生指针，拖动即擦
+    toolCursor.classList.remove("visible");
+    el.board.style.cursor = "default";
+  } else {
+    // 粉笔模式：显示跟随光标
+    toolCursor.dataset.tool = toolKey;
+    toolCursorImg.src = TOOL_ICON[toolKey];
+    el.board.style.cursor = "none";
+  }
+}
+
+el.boardShell.addEventListener("pointermove", (e) => {
+  if (state.currentTool === "eraser") return;
+  const rect = el.boardShell.getBoundingClientRect();
+  toolCursor.style.left = `${e.clientX - rect.left}px`;
+  toolCursor.style.top = `${e.clientY - rect.top}px`;
+  toolCursor.classList.add("visible");
+});
+
+el.boardShell.addEventListener("pointerleave", () => {
+  toolCursor.classList.remove("visible");
+});
+
+el.boardShell.addEventListener("pointerenter", () => {
+  if (state.currentTool !== "eraser") toolCursor.classList.add("visible");
+});
+
+/* ---------- 置物栏：随机散落 + 可拖动 + 点击选中 ---------- */
+
+const rackEl = document.querySelector(".rack-items");
+
+function randBetween(a, b) {
+  return a + Math.random() * (b - a);
+}
+
+// 黑板擦在右侧，粉笔在中间偏左
+const RACK_LAYOUT = [
+  { cls: "rack-chalk-white", minX: 30, maxX: 260 },   // 白粉笔：左侧
+  { cls: "rack-chalk-yellow", minX: 300, maxX: 520 }, // 黄粉笔：中左
+  { cls: "rack-eraser", minX: 580, maxX: 760 },       // 黑板擦：右侧
+];
+
+function layoutRackItems() {
+  const rackRect = rackEl.getBoundingClientRect();
+  const rackW = rackRect.width || window.innerWidth;
+
+  el.rackItems.forEach((item) => {
+    const tool = item.dataset.tool;
+    const cfg = RACK_LAYOUT.find((c) => item.classList.contains(c.cls));
+    const itemW = item.offsetWidth || 40;
+
+    // 根据屏宽缩放区间
+    const scale = rackW / 1920;
+    const lo = Math.min(rackW - itemW - 10, (cfg ? cfg.minX : 50) * scale);
+    const hi = Math.min(rackW - itemW - 6, (cfg ? cfg.maxX : rackW - 50) * scale);
+
+    const left = Math.max(6, randBetween(lo, hi));
+    const rot = tool === "eraser" ? randBetween(-3, 3) : randBetween(-6, 6);
+
+    item.style.left = `${left}px`;
+    item.style.transform = `rotate(${rot}deg)`;
+    item.dataset.homeX = left;
+    item.dataset.homeRot = rot;
+  });
+}
+
+// 拖动 + 点击选中（移动 < 3px 视为点击）
+el.rackItems.forEach((item) => {
+  let dragState = null;
+
+  item.addEventListener("pointerdown", (e) => {
+    e.preventDefault();
+    const rackRect = rackEl.getBoundingClientRect();
+    const itemRect = item.getBoundingClientRect();
+    const offsetX = e.clientX - itemRect.left;
+    const startLeft = itemRect.left - rackRect.left;
+
+    try { item.setPointerCapture(e.pointerId); } catch {}
+    item.classList.add("dragging");
+
+    dragState = { startLeft, moved: 0 };
+
+    const onMove = (ev) => {
+      const r = rackEl.getBoundingClientRect();
+      let newLeft = ev.clientX - r.left - offsetX;
+      const itemW = item.offsetWidth;
+      newLeft = Math.max(6, Math.min(r.width - itemW - 6, newLeft));
+      item.style.left = `${newLeft}px`;
+      dragState.moved = Math.abs(newLeft - dragState.startLeft);
+    };
+
+    const onUp = () => {
+      item.removeEventListener("pointermove", onMove);
+      item.removeEventListener("pointerup", onUp);
+      item.removeEventListener("pointercancel", onUp);
+      item.classList.remove("dragging");
+
+      // 轻微拖动 → 选中工具；较大拖动 → 不触发选中
+      if (dragState && dragState.moved < 4) {
+        el.rackItems.forEach((b) => b.classList.remove("is-active"));
+        item.classList.add("is-active");
+        applyToolCursor(item.dataset.tool);
+      } else {
+        // 拖动后倾角随机微调，保留"自然摆放"感
+        const newRot = (parseFloat(item.style.transform.match(/-?\d+/)?.[0] || "0") + randBetween(-4, 4));
+        const clampedRot = Math.max(-8, Math.min(8, newRot));
+        item.style.transform = `rotate(${clampedRot}deg)`;
+      }
+      dragState = null;
+    };
+
+    item.addEventListener("pointermove", onMove);
+    item.addEventListener("pointerup", onUp);
+    item.addEventListener("pointercancel", onUp);
+  });
+});
+
+// 响应窗口 resize：保持相对位置不变
+window.addEventListener("resize", () => {
+  if (!rackEl.offsetWidth) return;
+  // 第一次或小屏重建时重新布局以保证可见
+  layoutRackItems();
+});
+
+// 初始化
+layoutRackItems();
+el.rackItems[0].classList.add("is-active");
+applyToolCursor("chalk-white");
+
+/* ---------- 其他原有逻辑 ---------- */
 
 function setStatus(text, kind) {
   el.status.textContent = text || "";
@@ -116,20 +262,6 @@ function plotNow({ quiet } = {}) {
   return true;
 }
 
-function renderLatex(latex) {
-  if (!latex) {
-    el.latexBox.innerHTML = '<span class="placeholder">识别结果会显示在这里</span>';
-    el.rawLatex.textContent = "";
-    return;
-  }
-  try {
-    katex.render(latex, el.latexBox, { throwOnError: false, displayMode: true });
-  } catch {
-    el.latexBox.textContent = latex;
-  }
-  el.rawLatex.textContent = latex;
-}
-
 function fillFields(result) {
   el.inputExplicit.value = result.explicit || "";
   el.inputImplicit.value = result.implicit || "";
@@ -137,13 +269,6 @@ function fillFields(result) {
   el.inputParamX.value = (result.parametric && result.parametric.x) || "";
   el.inputParamY.value = (result.parametric && result.parametric.y) || "";
 }
-
-el.toolBtns.forEach((btn) => {
-  btn.addEventListener("click", () => {
-    el.toolBtns.forEach((b) => b.classList.toggle("is-active", b === btn));
-    board.setTool(TOOL_MAP[btn.dataset.tool]);
-  });
-});
 
 el.clearBtn.addEventListener("click", () => {
   board.clear();
@@ -157,8 +282,17 @@ el.modeBtns.forEach((btn) => {
   });
 });
 
-el.plotBtn.addEventListener("click", () => {
-  if (plotNow()) setStatus("已绘制", "ok");
+/* 所有输入框：改完 debounce 自动绘制 */
+const ALL_INPUTS = [
+  el.inputExplicit, el.inputImplicit,
+  el.inputParamX, el.inputParamY, el.inputPolar,
+];
+let inputTimer = null;
+ALL_INPUTS.forEach((inp) => {
+  inp.addEventListener("input", () => {
+    clearTimeout(inputTimer);
+    inputTimer = setTimeout(() => plotNow({ quiet: true }), 280);
+  });
 });
 
 el.resetView.addEventListener("click", () => plotter.resetView());
@@ -174,14 +308,14 @@ el.recognizeBtn.addEventListener("click", async () => {
   setStatus("正在识别手写公式…", "loading");
   try {
     const result = await recognize(image);
-    renderLatex(result.latex);
     fillFields(result);
     if (result.kind && result.kind !== "unknown") setMode(result.kind);
     const ok = plotNow({ quiet: true });
+    const kindLabel = { explicit: "显式", implicit: "隐式", parametric: "参数", polar: "极坐标" }[result.kind] || result.kind || "未知";
     if (ok) {
-      setStatus(`识别完成（${result.kind || "unknown"}），可直接修改表达式`, "ok");
+      setStatus(`✓ 识别完成 · 已匹配「${kindLabel}」· 可直接修改`, "ok");
     } else {
-      setStatus("识别完成，但表达式无法绘制，请检查后修改", "error");
+      setStatus(`识别完成（${kindLabel}），但表达式无法绘制，请修改后重试`, "error");
     }
   } catch (err) {
     setStatus(err.message || "识别失败", "error");

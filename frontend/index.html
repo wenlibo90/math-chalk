@@ -8,64 +8,59 @@
   <body>
     <div id="app">
       <header class="topbar">
-        <img class="brand" src="/brand/title.png" alt="黑板方程 MATH CHALK" />
+        <img class="brand" src="/brand/title.webp" alt="黑板方程 MATH CHALK" />
         <p class="tagline">用粉笔写下方程，识别后绘制函数图像</p>
       </header>
 
       <main class="layout">
         <section class="stage">
-          <div class="stage-toolbar">
-            <div class="tool-group" role="group" aria-label="书写工具">
-              <button class="tool-btn is-active" data-tool="chalk-white" title="白色粉笔">
-                <img src="/brand/chalk-white.png" alt="白粉笔" />
-              </button>
-              <button class="tool-btn" data-tool="chalk-yellow" title="黄色粉笔">
-                <img src="/brand/chalk-yellow.png" alt="黄粉笔" />
-              </button>
-              <button class="tool-btn" data-tool="eraser" title="黑板擦">
-                <img src="/brand/eraser.png" alt="橡皮" />
-              </button>
-            </div>
-            <div class="tool-group">
-              <button class="ghost-btn" id="clear-btn" title="擦干净">清屏</button>
-            </div>
-          </div>
           <div class="board-shell">
             <canvas id="board"></canvas>
+            <canvas id="plot"></canvas>
+            <div class="plot-reset" id="reset-view" title="重置视图">重置</div>
             <div class="board-hint" id="board-hint">在这里用粉笔写下方程，例如 y = x^2</div>
-          </div>
-        </section>
-
-        <aside class="control">
-          <div class="card">
-            <div class="card-head">
-              <h2>1. 识别公式</h2>
-              <button class="primary-btn" id="recognize-btn">识别</button>
-            </div>
-            <div class="latex-box" id="latex-box">
-              <span class="placeholder">识别结果会显示在这里</span>
-            </div>
-            <div class="raw-latex" id="raw-latex"></div>
-            <div class="status" id="status"></div>
+            <div class="graph-hint" id="graph-hint">滚轮缩放 · 拖动平移</div>
           </div>
 
-          <div class="card">
-            <div class="card-head">
-              <h2>2. 选择公式范围</h2>
+          <!-- 黑板下方置物栏：自然搁置粉笔和黑板擦 -->
+          <div class="chalk-rack">
+            <div class="rack-items">
+              <div class="rack-item rack-chalk-white is-active" data-tool="chalk-white" title="白色粉笔">
+                <img src="/brand/chalk-white.png" alt="白粉笔" />
+              </div>
+              <div class="rack-item rack-chalk-yellow" data-tool="chalk-yellow" title="黄色粉笔">
+                <img src="/brand/chalk-yellow.png" alt="黄粉笔" />
+              </div>
+              <div class="rack-item rack-eraser" data-tool="eraser" title="黑板擦">
+                <img src="/brand/eraser.png" alt="黑板擦" />
+              </div>
             </div>
+          </div>
+
+          <!-- 识别 & 编辑卡片 -->
+          <div class="card card-left">
+            <div class="card-head">
+              <h2>方程识别</h2>
+              <div class="card-head-actions">
+                <button class="ghost-btn sm" id="clear-btn" title="擦干净">清屏</button>
+                <button class="primary-btn sm" id="recognize-btn">识别</button>
+              </div>
+            </div>
+
             <div class="mode-switch" id="mode-switch">
               <button data-mode="explicit" class="is-active">显式 y=f(x)</button>
               <button data-mode="implicit">隐式 F(x,y)=0</button>
-              <button data-mode="parametric">参数方程</button>
+              <button data-mode="parametric">参数</button>
               <button data-mode="polar">极坐标</button>
             </div>
+
             <div class="expr-fields">
               <label class="expr-field" data-field="explicit">
                 <span>y =</span>
                 <input type="text" id="input-explicit" placeholder="x^2" autocomplete="off" />
               </label>
               <label class="expr-field" data-field="implicit">
-                <span>F(x, y) =</span>
+                <span>F(x,y) =</span>
                 <input type="text" id="input-implicit" placeholder="x^2 + y^2 - 1" autocomplete="off" />
               </label>
               <label class="expr-field" data-field="parametric-x">
@@ -81,20 +76,8 @@
                 <input type="text" id="input-polar" placeholder="1 + cos(theta)" autocomplete="off" />
               </label>
             </div>
-            <button class="primary-btn wide" id="plot-btn">绘制图像</button>
-          </div>
-        </aside>
 
-        <section class="graph">
-          <div class="graph-head">
-            <h2>3. 函数图像</h2>
-            <div class="graph-tools">
-              <button class="ghost-btn" id="reset-view">重置视图</button>
-            </div>
-          </div>
-          <div class="graph-shell">
-            <canvas id="plot"></canvas>
-            <div class="graph-hint" id="graph-hint">滚轮缩放，拖动平移</div>
+            <div class="status" id="status"></div>
           </div>
         </section>
       </main>
