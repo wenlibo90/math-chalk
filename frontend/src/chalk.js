@@ -42,7 +42,7 @@ export class ChalkBoard {
     this.hint = hintEl;
     this.dpr = Math.min(window.devicePixelRatio || 1, 2);
     this.ctx = canvas.getContext("2d");
-    this.tool = { type: "chalk", color: "chalk-white", radius: 7 };
+    this.tool = null;
     this.drawing = false;
     this.last = null;
     this.lastTime = 0;
@@ -87,7 +87,7 @@ export class ChalkBoard {
   }
 
   setTool(tool) {
-    this.tool = { ...this.tool, ...tool };
+    this.tool = tool ? { radius: 7, ...(this.tool || {}), ...tool } : null;
   }
 
   clear() {
@@ -115,6 +115,7 @@ export class ChalkBoard {
 
     c.addEventListener("pointerdown", (e) => {
       if (e.button !== undefined && e.button !== 0) return;
+      if (!this.tool) return;
       c.setPointerCapture(e.pointerId);
       this.drawing = true;
       const p = this._pos(e);
@@ -152,8 +153,8 @@ export class ChalkBoard {
     });
   }
 
-  _stroke(from, to, speed) {
-    const spacing = this.tool.type === "eraser" ? 4 : Math.max(1.4, this.tool.radius * 0.34);
+  _stroke(from, to, speed, tool = this.tool) {
+    const spacing = tool.type === "eraser" ? 4 : Math.max(1.4, tool.radius * 0.34);
     const dist = Math.hypot(to.x - from.x, to.y - from.y);
     const steps = Math.max(1, Math.ceil(dist / spacing));
     for (let i = 1; i <= steps; i++) {
@@ -162,14 +163,19 @@ export class ChalkBoard {
         x: from.x + (to.x - from.x) * t,
         y: from.y + (to.y - from.y) * t,
       };
-      this._stamp(from, p, speed);
+      this._stamp(from, p, speed, tool);
     }
   }
 
-  _stamp(from, p, speed) {
+  // 供外部（如被拖动的黑板擦）调用：在两点之间擦除
+  eraseSegment(from, to, radius = 10) {
+    this._stroke(from, to, 0, { type: "eraser", radius });
+  }
+
+  _stamp(from, p, speed, tool = this.tool) {
     const ctx = this.ctx;
-    if (this.tool.type === "eraser") {
-      const r = this.tool.radius * 2.3;
+    if (tool.type === "eraser") {
+      const r = tool.radius * 2.3;
       const grad = ctx.createRadialGradient(p.x, p.y, 0, p.x, p.y, r);
       grad.addColorStop(0, "rgba(0,0,0,1)");
       grad.addColorStop(0.7, "rgba(0,0,0,0.75)");
@@ -185,8 +191,8 @@ export class ChalkBoard {
       return;
     }
 
-    const radius = this.tool.radius;
-    const sprite = this._sprite(this.tool.color, radius);
+    const radius = tool.radius;
+    const sprite = this._sprite(tool.color, radius);
     const d = sprite.width;
     const alpha = Math.min(0.95, Math.max(0.42, 0.95 - speed * 0.22));
     const jitter = radius * 0.5;
@@ -242,6 +248,26 @@ export class ChalkBoard {
       data[i + 3] = 255;
     }
     octx.putImageData(img, 0, 0);
+    return out.toDataURL("image/png");
+  }
+
+  // 导出：仅手写笔迹的透明背景 PNG，裁剪到笔迹范围
+  exportTransparentPng(padding = 44) {
+    if (this.isEmpty()) return null;
+    const dpr = this.dpr;
+    const x = Math.max(0, Math.floor((this.bbox.minX - padding) * dpr));
+    const y = Math.max(0, Math.floor((this.bbox.minY - padding) * dpr));
+    const right = Math.min(this.canvas.width, Math.ceil((this.bbox.maxX + padding) * dpr));
+    const bottom = Math.min(this.canvas.height, Math.ceil((this.bbox.maxY + padding) * dpr));
+    const w = Math.max(1, right - x);
+    const h = Math.max(1, bottom - y);
+
+    const out = document.createElement("canvas");
+    out.width = w;
+    out.height = h;
+    const octx = out.getContext("2d");
+    // 原样保留粉笔颜色与透明度
+    octx.drawImage(this.canvas, x, y, w, h, 0, 0, w, h);
     return out.toDataURL("image/png");
   }
 }

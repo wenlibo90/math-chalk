@@ -73,17 +73,17 @@ export class Plotter {
   }
 
   _bind() {
-    const c = this.container;
-    const getCanvasRect = () => this.canvas.getBoundingClientRect();
+    // 监听绑在画布本身：避免捕获整个黑板导致覆盖层的点击事件被吞掉
+    const c = this.canvas;
+    const getRect = () => this.canvas.getBoundingClientRect();
 
     c.addEventListener(
       "wheel",
       (e) => {
         e.preventDefault();
-        const rect = getCanvasRect();
+        const rect = getRect();
         const px = e.clientX - rect.left;
         const py = e.clientY - rect.top;
-        if (px < 0 || py < 0 || px > rect.width || py > rect.height) return;
         const wx = this._sx2wx(px);
         const wy = this._sy2wy(py);
         const factor = e.deltaY < 0 ? 0.85 : 1 / 0.85;
@@ -97,17 +97,13 @@ export class Plotter {
     );
 
     c.addEventListener("pointerdown", (e) => {
-      if (!this.spec) return;
-      const rect = getCanvasRect();
-      const px = e.clientX - rect.left;
-      const py = e.clientY - rect.top;
-      if (px < 0 || py < 0 || px > rect.width || py > rect.height) return;
+      const rect = getRect();
       c.setPointerCapture?.(e.pointerId);
-      this.drag = { x: px, y: py };
+      this.drag = { x: e.clientX - rect.left, y: e.clientY - rect.top };
     });
     c.addEventListener("pointermove", (e) => {
       if (!this.drag) return;
-      const rect = getCanvasRect();
+      const rect = getRect();
       const x = e.clientX - rect.left;
       const y = e.clientY - rect.top;
       const dx = (x - this.drag.x) / this.cssW;
@@ -155,7 +151,6 @@ export class Plotter {
   }
 
   resetView() {
-    if (!this.spec) return;
     this.autoFit();
     this.render();
   }
