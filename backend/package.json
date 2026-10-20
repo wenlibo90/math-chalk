@@ -1,0 +1,15 @@
+{
+  "name": "math-chalk-backend",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Math Chalk backend: handwritten math recognition via vision LLM",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node server.js"
+  },
+  "dependencies": {
+    "express": "^4.19.2"
+  }
+}
