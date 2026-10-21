@@ -13,6 +13,19 @@ const el = {
   plotHint: document.getElementById("graph-hint"),
   recognizeBtn: document.getElementById("recognize-btn"),
   clearBtn: document.getElementById("clear-btn"),
+  uploadBtn: document.getElementById("upload-btn"),
+  uploadInput: document.getElementById("upload-input"),
+  rewardBtn: document.getElementById("reward-btn"),
+  rewardModal: document.getElementById("reward-modal"),
+  rewardMask: document.getElementById("reward-mask"),
+  rewardClose: document.getElementById("reward-close"),
+  danmakuBtn: document.getElementById("danmaku-btn"),
+  msgDock: document.getElementById("msg-dock"),
+  bubble: document.getElementById("msg-bubble"),
+  bubbleText: document.getElementById("msg-bubble-text"),
+  danmakuInput: document.getElementById("danmaku-input"),
+  danmakuText: document.getElementById("danmaku-text"),
+  danmakuSend: document.getElementById("danmaku-send"),
   resetView: document.getElementById("reset-view"),
   plotResize: document.getElementById("plot-resize"),
   consoleEl: document.getElementById("console"),
@@ -435,16 +448,73 @@ el.kindInput.addEventListener("keydown", (e) => {
   if (e.key === "Enter") el.kindInput.blur();
 });
 
-/* 示例贴图：把示例对应的手写图片贴到黑板上（无则隐藏） */
-function showBoardImage(src) {
+/* 示例贴图 / 上传回显：把图片画到黑板上（无则隐藏），并支持被黑板擦擦除 */
+const boardImageCtx = el.boardImage ? el.boardImage.getContext("2d") : null;
+
+function drawBoardImage(img) {
+  const canvas = el.boardImage;
+  canvas.width = img.naturalWidth;
+  canvas.height = img.naturalHeight;
+  boardImageCtx.globalCompositeOperation = "source-over";
+  boardImageCtx.clearRect(0, 0, canvas.width, canvas.height);
+  boardImageCtx.drawImage(img, 0, 0, canvas.width, canvas.height);
+}
+
+function showBoardImage(src, upload = false) {
   if (!el.boardImage) return;
   if (!src) {
-    el.boardImage.classList.remove("is-visible");
+    el.boardImage.classList.remove("is-visible", "is-upload");
     return;
   }
-  if (el.boardImage.getAttribute("src") !== src) el.boardImage.src = src;
-  el.boardImage.classList.add("is-visible");
+  const img = new Image();
+  img.onload = () => {
+    drawBoardImage(img);
+    el.boardImage.classList.toggle("is-upload", upload);
+    el.boardImage.classList.add("is-visible");
+  };
+  img.onerror = () => {
+    el.boardImage.classList.remove("is-visible", "is-upload");
+  };
+  img.src = src;
 }
+
+// 黑板擦：在贴图上擦出透明缺口，模拟"擦得掉"的手感
+function eraseBoardImageAt(clientX, clientY, radius) {
+  const canvas = el.boardImage;
+  if (!canvas || !boardImageCtx || !canvas.classList.contains("is-visible")) return;
+  const rect = canvas.getBoundingClientRect();
+  if (!rect.width || !rect.height) return;
+  if (
+    clientX < rect.left - radius ||
+    clientX > rect.right + radius ||
+    clientY < rect.top - radius ||
+    clientY > rect.bottom + radius
+  ) {
+    return;
+  }
+  const scale = canvas.width / rect.width;
+  const x = (clientX - rect.left) * scale;
+  const y = (clientY - rect.top) * scale;
+  const r = radius * scale;
+  const ctx = boardImageCtx;
+  const grad = ctx.createRadialGradient(x, y, 0, x, y, r);
+  grad.addColorStop(0, "rgba(0,0,0,1)");
+  grad.addColorStop(0.7, "rgba(0,0,0,0.75)");
+  grad.addColorStop(1, "rgba(0,0,0,0)");
+  ctx.save();
+  ctx.globalCompositeOperation = "destination-out";
+  ctx.fillStyle = grad;
+  ctx.beginPath();
+  ctx.arc(x, y, r, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.restore();
+}
+
+// 黑板擦擦到黑板任意位置时，同步擦除贴图
+board.onErase = (x, y, r) => {
+  const rect = el.board.getBoundingClientRect();
+  eraseBoardImageAt(rect.left + x, rect.top + y, r);
+};
 
 /* 示例：点击直接填入表达式并绘制 */
 function applyExample(chip) {
@@ -570,14 +640,110 @@ if (el.plotResize) {
   });
 }
 
-el.recognizeBtn.addEventListener("click", async () => {
-  if (board.isEmpty()) {
-    setStatus("! 请先在黑板上写下方程", "error");
-    return;
+/* 识别兜底：后端没给出可直接绘制的二维表达式时，尝试从识别出的 latex 反推 */
+const LATEX_FUNCS = [
+  "sqrt", "cbrt", "sin", "cos", "tan", "cot", "sec", "csc", "asin", "acos", "atan",
+  "sinh", "cosh", "tanh", "log10", "log", "ln", "exp", "abs", "min", "max",
+  "floor", "ceil", "round", "sign",
+];
+
+function readLatexGroup(s, i) {
+  let depth = 0;
+  let out = "";
+  for (; i < s.length; i++) {
+    const c = s[i];
+    if (c === "{") {
+      depth++;
+      if (depth === 1) continue;
+    } else if (c === "}") {
+      depth--;
+      if (depth === 0) break;
+    }
+    out += c;
   }
-  const image = board.exportImage();
-  el.recognizeBtn.disabled = true;
-  el.recognizeBtn.classList.add("is-loading");
+  return [out, i + 1];
+}
+
+function latexToPlain(latex) {
+  const s = String(latex || "");
+  let out = "";
+  for (let i = 0; i < s.length; i++) {
+    const c = s[i];
+    if (c === "\\") {
+      let j = i + 1;
+      let name = "";
+      while (j < s.length && /[a-zA-Z]/.test(s[j])) {
+        name += s[j];
+        j++;
+      }
+      if (name === "frac") {
+        const [a, i1] = readLatexGroup(s, j);
+        const [b, i2] = readLatexGroup(s, i1);
+        out += `((${latexToPlain(a)})/(${latexToPlain(b)}))`;
+        i = i2 - 1;
+      } else if (name === "sqrt") {
+        const [a, i1] = readLatexGroup(s, j);
+        out += `sqrt(${latexToPlain(a)})`;
+        i = i1 - 1;
+      } else if (name === "cdot" || name === "times") {
+        out += "*";
+        i = j - 1;
+      } else if (name === "div") {
+        out += "/";
+        i = j - 1;
+      } else if (name === "pi") {
+        out += "pi";
+        i = j - 1;
+      } else if (name === "ln") {
+        out += "log";
+        i = j - 1;
+      } else if (name) {
+        out += `${name} `;
+        i = j - 1;
+      } else {
+        i = j - 1;
+      }
+    } else if (c === "{") {
+      const [a, i1] = readLatexGroup(s, i);
+      out += `(${latexToPlain(a)})`;
+      i = i1 - 1;
+    } else if (c === "}") {
+      // 忽略多余的右花括号
+    } else {
+      out += c;
+    }
+  }
+  return out.replace(/\s+/g, " ").trim();
+}
+
+function plainVars(plain) {
+  let s = plain;
+  for (const f of LATEX_FUNCS) {
+    s = s.replace(new RegExp(`\\b${f}\\b`, "g"), " ");
+  }
+  s = s.replace(/\b(pi|theta|e)\b/g, " ");
+  const letters = s.match(/[a-zA-Z]/g) || [];
+  return new Set(letters.map((c) => c.toLowerCase()));
+}
+
+function deriveFromLatex(latex) {
+  const plain = latexToPlain(latex);
+  const parts = plain.split("=");
+  if (parts.length !== 2) return null;
+  const lhs = parts[0].trim();
+  const rhs = parts[1].trim();
+  if (!lhs || !rhs) return null;
+  const vars = plainVars(plain);
+  if (vars.size === 0) return null;
+  const onlyXY = [...vars].every((v) => v === "x" || v === "y");
+  if (!onlyXY) return { error: "multi" };
+  if (lhs === "y" && [...plainVars(rhs)].every((v) => v === "x")) {
+    return { mode: "explicit", expr: rhs };
+  }
+  return { mode: "implicit", expr: `${lhs}-(${rhs})` };
+}
+
+async function runRecognize(image, { echo = false } = {}) {
   setStatus("> 正在识别手写公式…", "loading");
   showBoardImage("");
   try {
@@ -585,19 +751,111 @@ el.recognizeBtn.addEventListener("click", async () => {
     fillFields(result);
     renderLatex(result.latex);
     el.consoleBody.hidden = false;
-    if (result.kind && result.kind !== "unknown") setMode(result.kind);
-    const ok = plotNow({ quiet: true });
-    const kindLabel = KIND_LABEL[result.kind] || "未知";
+    if (KIND_LABEL[result.kind]) setMode(result.kind);
+
+    let ok = plotNow({ quiet: true });
+    let unsupported = false;
+    if (!ok) {
+      // 以右上角识别出的公式为准，尝试推导出可绘制的二维表达式
+      const derived = deriveFromLatex(result.latex);
+      if (derived && derived.mode) {
+        if (derived.mode === "explicit") el.inputExplicit.value = derived.expr;
+        else el.inputImplicit.value = derived.expr;
+        setMode(derived.mode);
+        ok = plotNow({ quiet: true });
+      } else if (derived && derived.error === "multi") {
+        unsupported = true;
+      }
+    }
+
+    if (echo) showBoardImage(image, true);
+    // 识别完成：下次落笔前自动清掉上一道笔迹，避免多道公式叠加
+    board.armAutoClear();
+
     if (ok) {
-      setStatus(`> 识别完成 · 命中「${kindLabel}」，可修改下方表达式`, "ok");
+      const label = KIND_LABEL[result.kind];
+      setStatus(
+        label
+          ? `> 识别完成 · 命中「${label}」，可修改下方表达式`
+          : "> 识别完成 · 已生成函数图像，可修改下方表达式",
+        "ok"
+      );
+    } else if (unsupported) {
+      setStatus("! 该式为三维/多元表达式（含 x、y 以外的变量），当前仅支持二维函数图像", "error");
     } else {
-      setStatus(`! 识别为「${kindLabel}」，但表达式无法绘制，请修改`, "error");
+      setStatus(`! 识别为「${KIND_LABEL[result.kind] || "未知"}」，但表达式无法绘制，请修改`, "error");
     }
   } catch (err) {
     setStatus(`! ${err.message || "识别失败"}`, "error");
+  }
+}
+
+el.recognizeBtn.addEventListener("click", async () => {
+  if (board.isEmpty()) {
+    setStatus("! 请先在黑板上写下方程", "error");
+    return;
+  }
+  el.recognizeBtn.disabled = true;
+  el.recognizeBtn.classList.add("is-loading");
+  try {
+    await runRecognize(board.exportImage());
   } finally {
     el.recognizeBtn.disabled = false;
     el.recognizeBtn.classList.remove("is-loading");
+  }
+});
+
+/* ---------- 上传图片识别 ---------- */
+
+function loadImageFromFile(file) {
+  return new Promise((resolve, reject) => {
+    const url = URL.createObjectURL(file);
+    const img = new Image();
+    img.onload = () => {
+      URL.revokeObjectURL(url);
+      resolve(img);
+    };
+    img.onerror = () => {
+      URL.revokeObjectURL(url);
+      reject(new Error("图片读取失败"));
+    };
+    img.src = url;
+  });
+}
+
+// 过大图片先等比压缩，避免请求体过大
+async function fileToDataUrl(file, maxSide = 1280) {
+  const img = await loadImageFromFile(file);
+  const scale = Math.min(1, maxSide / Math.max(img.naturalWidth, img.naturalHeight));
+  const w = Math.max(1, Math.round(img.naturalWidth * scale));
+  const h = Math.max(1, Math.round(img.naturalHeight * scale));
+  const c = document.createElement("canvas");
+  c.width = w;
+  c.height = h;
+  c.getContext("2d").drawImage(img, 0, 0, w, h);
+  return c.toDataURL("image/png");
+}
+
+el.uploadBtn.addEventListener("click", () => el.uploadInput.click());
+
+el.uploadInput.addEventListener("change", async () => {
+  const file = el.uploadInput.files && el.uploadInput.files[0];
+  el.uploadInput.value = "";
+  if (!file) return;
+  if (!file.type.startsWith("image/")) {
+    setStatus("! 请上传图片文件", "error");
+    return;
+  }
+  el.uploadBtn.disabled = true;
+  el.uploadBtn.classList.add("is-loading");
+  try {
+    const image = await fileToDataUrl(file);
+    await runRecognize(image, { echo: true });
+  } catch (err) {
+    setStatus(`! ${err.message || "读取图片失败"}`, "error");
+  } finally {
+    el.uploadBtn.disabled = false;
+    el.uploadBtn.classList.remove("is-loading");
   }
 });
 
@@ -774,6 +1032,140 @@ window.addEventListener("resize", () => {
   if (tourOn) renderTour();
 });
 
+/* ---------- 左下角控制台上方：气泡留言（每次一条，定时翻页） ---------- */
+
+const BUBBLE_ENABLED = false; // 气泡功能暂时隐藏，改为 true 即可开启
+const BUBBLE_PRESETS = [
+  "不想学数学，我想画画、写字",
+  "能不能增加作品分享和错题打印",
+  "哇，可以做黑板报",
+  "这黑板比我教室的高级",
+  "学数学也可以很快乐",
+  "画个心形函数试试？",
+  "用粉笔写公式，仪式感拉满",
+  "我摊牌了，我是来画画的",
+  "谁会画椭圆？",
+];
+
+const BUBBLE_INTERVAL = 6000;
+let bubblePool = [];
+let bubbleIndex = 0;
+let bubbleTimer = null;
+
+// 气泡/留言入口跟随控制台顶部，始终贴在控制台上方
+function positionMsgDock() {
+  if (!el.msgDock || !el.consoleEl) return;
+  const r = el.consoleEl.getBoundingClientRect();
+  const bottom = window.innerHeight - r.top + 12;
+  el.msgDock.style.bottom = `${bottom}px`;
+  if (el.danmakuInput) {
+    el.danmakuInput.style.bottom = `${bottom + el.msgDock.offsetHeight + 10}px`;
+  }
+}
+
+function showBubble(text) {
+  if (!el.bubble || !el.bubbleText) return;
+  el.bubbleText.textContent = text;
+  el.bubble.hidden = false;
+  positionMsgDock();
+  requestAnimationFrame(() => el.bubble.classList.add("is-show"));
+}
+
+function nextBubble() {
+  if (!el.bubble || !bubblePool.length) return;
+  el.bubble.classList.remove("is-show");
+  window.setTimeout(() => {
+    showBubble(bubblePool[bubbleIndex % bubblePool.length]);
+    bubbleIndex++;
+  }, 300);
+}
+
+function restartBubbleTimer() {
+  if (bubbleTimer) window.clearInterval(bubbleTimer);
+  bubbleTimer = window.setInterval(nextBubble, BUBBLE_INTERVAL);
+}
+
+function startBubbles() {
+  if (!BUBBLE_ENABLED || !el.bubble || !BUBBLE_PRESETS.length) return;
+  bubblePool = BUBBLE_PRESETS.slice();
+  for (let i = bubblePool.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [bubblePool[i], bubblePool[j]] = [bubblePool[j], bubblePool[i]];
+  }
+  bubbleIndex = 0;
+  positionMsgDock();
+  showBubble(bubblePool[bubbleIndex++]);
+  restartBubbleTimer();
+}
+
+function closeDanmakuInput() {
+  el.danmakuInput.hidden = true;
+  el.danmakuBtn.classList.remove("is-active");
+}
+
+function sendDanmaku() {
+  const t = el.danmakuText.value.trim();
+  if (!t) return;
+  closeDanmakuInput();
+  if (el.bubble) {
+    el.bubble.classList.remove("is-show");
+    window.setTimeout(() => {
+      showBubble(t);
+      // 自己的留言展示后，继续按时翻页
+      restartBubbleTimer();
+    }, 240);
+  }
+  el.danmakuText.value = "";
+}
+
+el.danmakuBtn.addEventListener("click", () => {
+  const show = el.danmakuInput.hidden;
+  el.danmakuInput.hidden = !show;
+  el.danmakuBtn.classList.toggle("is-active", show);
+  if (show) {
+    positionMsgDock();
+    el.danmakuText.focus();
+  }
+});
+
+el.danmakuSend.addEventListener("click", sendDanmaku);
+el.danmakuText.addEventListener("keydown", (e) => {
+  if (e.key === "Enter") {
+    e.preventDefault();
+    sendDanmaku();
+  }
+});
+document.addEventListener("pointerdown", (e) => {
+  if (el.danmakuInput.hidden) return;
+  if (el.danmakuInput.contains(e.target) || el.danmakuBtn.contains(e.target)) return;
+  closeDanmakuInput();
+});
+
+window.addEventListener("resize", positionMsgDock);
+if (el.consoleEl) {
+  new MutationObserver(positionMsgDock).observe(el.consoleEl, {
+    childList: true,
+    subtree: true,
+    attributes: true,
+    attributeFilter: ["hidden", "class", "style"],
+  });
+}
+
+/* ---------- 赞赏弹窗 ---------- */
+
+function closeReward() {
+  el.rewardModal.hidden = true;
+}
+
+el.rewardBtn.addEventListener("click", () => {
+  el.rewardModal.hidden = false;
+});
+el.rewardClose.addEventListener("click", closeReward);
+el.rewardMask.addEventListener("click", closeReward);
+document.addEventListener("keydown", (e) => {
+  if (e.key === "Escape" && !el.rewardModal.hidden) closeReward();
+});
+
 /* ---------- 启动遮罩：等黑板背景就绪后再淡出，避免首屏白闪 ---------- */
 function dismissBoot() {
   const boot = document.getElementById("boot");
@@ -783,6 +1175,7 @@ function dismissBoot() {
   boot.classList.add("is-hidden");
   window.setTimeout(() => boot.remove(), 500);
   window.setTimeout(startTour, 450);
+  startBubbles();
 }
 
 let bootDone = false;

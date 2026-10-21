@@ -207,6 +207,17 @@ img {
   opacity: 1;
 }
 
+/* 上传的图片：显示在黑板中央舞台 */
+.board-image.is-upload {
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  max-width: min(640px, 52vw);
+  max-height: 62vh;
+  border-radius: 8px;
+  filter: drop-shadow(0 8px 24px rgba(0, 0, 0, 0.55));
+}
+
 /* 图像层：黑板右下角一个小窗口，直接融入黑板 */
 #plot {
   position: absolute;
@@ -440,8 +451,8 @@ img {
 }
 
 #clear-btn {
-  width: 20px;
-  height: 20px;
+  width: 26px;
+  height: 26px;
 }
 
 /* 扩大清屏按钮的可点击区域，避免点不中 */
@@ -451,9 +462,61 @@ img {
   inset: -16px;
 }
 
+/* 上传图片识别按钮 */
+#upload-btn {
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  border: 1px solid rgba(238, 244, 238, 0.32);
+  background: rgba(8, 20, 14, 0.42);
+  color: rgba(242, 247, 242, 0.92);
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+  transition: transform 0.12s, filter 0.15s;
+}
+
+#upload-btn svg {
+  display: block;
+  width: 18px;
+  height: 18px;
+  filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.5));
+}
+
+/* 加载态保持低调，无光晕、无闪烁 */
+#upload-btn:disabled,
+#upload-btn.is-loading {
+  opacity: 0.55;
+  cursor: progress;
+}
+
 /* 隐藏下载（导出）按钮 */
 #export-btn {
   display: none;
+}
+
+/* 赞赏按钮（爱心） */
+#reward-btn {
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  border: 1px solid rgba(238, 244, 238, 0.32);
+  background: rgba(8, 20, 14, 0.42);
+  color: rgba(242, 247, 242, 0.92);
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+  transition: transform 0.12s, filter 0.15s, border-color 0.15s, color 0.15s;
+}
+
+#reward-btn svg {
+  display: block;
+  width: 18px;
+  height: 18px;
+  filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.5));
+}
+
+#reward-btn:hover {
+  color: #ff7a9c;
+  border-color: rgba(255, 122, 156, 0.65);
 }
 
 .icon-btn {
@@ -633,6 +696,154 @@ img {
   text-shadow: 0 0 16px rgba(247, 246, 239, 0.3);
 }
 
+/* ---------- 左下角控制台上方：气泡留言 ---------- */
+
+.msg-dock {
+  position: absolute;
+  left: 31px;
+  bottom: 200px;
+  z-index: 10;
+  display: flex;
+  align-items: flex-end;
+  gap: 10px;
+  pointer-events: none;
+}
+
+/* 气泡功能暂时隐藏（恢复时删除此规则即可） */
+.msg-dock {
+  display: none;
+}
+
+.msg-add {
+  flex: none;
+  width: 34px;
+  height: 34px;
+  padding: 0;
+  border-radius: 50%;
+  border: 1px solid rgba(238, 244, 238, 0.32);
+  background: rgba(8, 20, 14, 0.42);
+  color: rgba(242, 247, 242, 0.92);
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+  pointer-events: auto;
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+  transition: transform 0.12s, filter 0.15s, border-color 0.15s, color 0.15s;
+}
+
+.msg-add svg {
+  display: block;
+  width: 18px;
+  height: 18px;
+  filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.5));
+}
+
+.msg-add:hover {
+  filter: brightness(1.08);
+}
+
+.msg-add.is-active {
+  border-color: rgba(94, 224, 255, 0.65);
+  color: #d6f6ff;
+}
+
+.msg-bubble {
+  position: relative;
+  max-width: 300px;
+  padding: 10px 15px;
+  border-radius: 16px;
+  border: 1px solid var(--card-line);
+  background: rgba(12, 28, 20, 0.62);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  color: rgba(233, 250, 242, 0.95);
+  font-size: 13px;
+  line-height: 1.55;
+  box-shadow: 0 10px 26px rgba(0, 0, 0, 0.35);
+  opacity: 0;
+  transform: translateY(6px);
+  transition: opacity 0.28s ease, transform 0.28s ease;
+}
+
+.msg-bubble.is-show {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+/* 气泡尾巴，指向左侧的留言按钮 */
+.msg-bubble::after {
+  content: "";
+  position: absolute;
+  left: -5px;
+  bottom: 12px;
+  width: 10px;
+  height: 10px;
+  background: inherit;
+  border-left: 1px solid var(--card-line);
+  border-bottom: 1px solid var(--card-line);
+  transform: rotate(45deg);
+  border-radius: 0 0 0 3px;
+}
+
+/* ---------- 弹幕输入框 ---------- */
+
+.danmaku-input {
+  position: absolute;
+  left: 31px;
+  bottom: 250px;
+  z-index: 22;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 5px 5px 14px;
+  border-radius: 999px;
+  border: 1px solid var(--card-line);
+  background: rgba(12, 28, 20, 0.72);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  box-shadow: 0 10px 26px rgba(0, 0, 0, 0.4);
+}
+
+.danmaku-input[hidden] {
+  display: none;
+}
+
+.danmaku-input input {
+  width: 210px;
+  height: 26px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: #eafff6;
+  font-family: inherit;
+  font-size: 12.5px;
+  outline: none;
+}
+
+.danmaku-input input::placeholder {
+  color: rgba(226, 244, 232, 0.45);
+}
+
+.danmaku-input button {
+  flex: none;
+  height: 28px;
+  padding: 0 14px;
+  border: 0;
+  border-radius: 999px;
+  background: var(--accent);
+  color: #062028;
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: filter 0.15s;
+}
+
+.danmaku-input button:hover {
+  filter: brightness(1.08);
+}
+
 /* ---------- 黑板上的自定义工具光标 ---------- */
 
 .tool-cursor {
@@ -775,6 +986,145 @@ img {
 
 .tour-next:hover {
   filter: brightness(1.08);
+}
+
+/* ---------- 赞赏弹窗 ---------- */
+
+.reward-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 400;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.reward-modal[hidden] {
+  display: none;
+}
+
+.reward-mask {
+  position: absolute;
+  inset: 0;
+  background: rgba(6, 16, 12, 0.5);
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+}
+
+.reward-card {
+  position: relative;
+  z-index: 1;
+  width: min(460px, calc(100vw - 48px));
+  padding: 26px 26px 22px;
+  border-radius: 22px;
+  border: 1px solid rgba(255, 255, 255, 0.7);
+  background: linear-gradient(180deg, #ffffff 0%, #f2faf5 100%);
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.35);
+  text-align: center;
+  color: #2b3a33;
+}
+
+.reward-close {
+  position: absolute;
+  top: 12px;
+  right: 14px;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: #8ba095;
+  font-size: 20px;
+  line-height: 1;
+  cursor: pointer;
+  transition: color 0.15s, background 0.15s;
+}
+
+.reward-close:hover {
+  color: #2b3a33;
+  background: rgba(47, 90, 70, 0.08);
+}
+
+.reward-head {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.reward-heart {
+  width: 22px;
+  height: 22px;
+  color: #ff6f91;
+  filter: drop-shadow(0 2px 6px rgba(255, 111, 145, 0.4));
+}
+
+.reward-title {
+  margin: 0;
+  font-size: 17px;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  color: #1f302a;
+}
+
+.reward-desc {
+  margin: 0 0 20px;
+  font-size: 13px;
+  line-height: 1.7;
+  color: #53685e;
+}
+
+.reward-codes {
+  display: flex;
+  justify-content: center;
+  gap: 18px;
+}
+
+.reward-code {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  margin: 0;
+  padding: 12px 12px 14px;
+  border-radius: 16px;
+  border: 1px solid rgba(47, 90, 70, 0.08);
+  background: #ffffff;
+  box-shadow: 0 8px 20px rgba(47, 90, 70, 0.1);
+  transition: transform 0.18s ease, box-shadow 0.18s ease;
+}
+
+.reward-code:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 14px 28px rgba(47, 90, 70, 0.16);
+}
+
+.reward-code img {
+  display: block;
+  width: 146px;
+  height: 146px;
+  border-radius: 10px;
+  object-fit: contain;
+}
+
+.reward-code figcaption {
+  margin-top: 10px;
+  font-size: 13px;
+  font-weight: 600;
+  color: #2f4a3d;
+}
+
+.reward-hint {
+  margin-top: 3px;
+  font-size: 11px;
+  color: #96a69d;
+}
+
+.reward-note {
+  margin: 20px 0 0;
+  font-size: 12px;
+  color: #9aaba2;
 }
 
 /* ---------- 窄屏提示：窗口过小不展示内容，避免严重错位 ---------- */

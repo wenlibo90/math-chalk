@@ -48,6 +48,8 @@ export class ChalkBoard {
     this.lastTime = 0;
     this.bbox = null;
     this.hasInk = false;
+    this.autoClear = false;
+    this.onErase = null;
     this.sprites = {};
     this.resize();
     this._bind();
@@ -90,6 +92,11 @@ export class ChalkBoard {
     this.tool = tool ? { radius: 7, ...(this.tool || {}), ...tool } : null;
   }
 
+  // 识别完成后标记：下次落笔画新公式前，先清掉上一道笔迹
+  armAutoClear() {
+    this.autoClear = true;
+  }
+
   clear() {
     this.ctx.save();
     this.ctx.setTransform(1, 0, 0, 1, 0, 0);
@@ -116,6 +123,10 @@ export class ChalkBoard {
     c.addEventListener("pointerdown", (e) => {
       if (e.button !== undefined && e.button !== 0) return;
       if (!this.tool) return;
+      if (this.autoClear) {
+        this.clear();
+        this.autoClear = false;
+      }
       c.setPointerCapture(e.pointerId);
       this.drawing = true;
       const p = this._pos(e);
@@ -188,6 +199,7 @@ export class ChalkBoard {
       ctx.fill();
       ctx.restore();
       this._expand(p.x, p.y, r);
+      if (this.onErase) this.onErase(p.x, p.y, r);
       return;
     }
 
